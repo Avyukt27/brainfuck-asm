@@ -38,7 +38,9 @@ _start:
   ; move file descriptor to r15
   mov r15, rax
 
-  ; rdi has the file descriptor
+  ; read 8 byte (char) chunks of file
+chunk_read:
+  ; r15 has the file descriptor
   mov rax, SYS_READ
   mov rdi, r15
   lea rsi, [buf]
@@ -46,42 +48,47 @@ _start:
   syscall
 
   ; exit on error
-  cmp rax, 0
+  test rax, rax
   jl read_failed
+  ; exit on EOF
+  jz exit
 
   ; buf contains the read data
+  mov rdx, rax
   mov rax, SYS_WRITE
   mov rdi, FD_STDOUT
   lea rsi, [buf]
-  mov rdx, 8
   syscall
 
+  jmp chunk_read
+
+exit:
   ; exit with code 0
   mov rax, SYS_EXIT
   xor rdi, rdi
   syscall
 
 open_failed:
-  neg rax ; Turn negative error into a positive exit code
+  neg rax ; turn negative error into a positive exit code
   mov rdi, rax
   lea rsi, [OPEN_ERR]
   mov rdx, OPEN_ERR_LEN
-  jmp exit
+  jmp err_exit
 
 read_failed:
   neg rax
   mov rdi, rax
   lea rsi, [READ_ERR]
   mov rdx, READ_ERR_LEN
-  jmp exit
+  jmp err_exit
 
-; exit
+; err_exit
 ; Exits the program with an error code and message
 ; Args:
 ;   rdi: Return code
 ;   rsi: Pointer to error message
 ;   rdx: Length of error message
-exit:
+err_exit:
   mov r8, rdi ; store return code in r8
 
   mov rax, SYS_WRITE
