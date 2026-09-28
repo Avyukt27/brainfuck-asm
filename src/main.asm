@@ -6,10 +6,16 @@ DEFAULT REL
 %define SYS_EXIT 60
 
 %define FD_STDOUT 1
+%define FD_STDERR 2
 
 %define O_RDONLY 0
 
 section .data
+  OPEN_ERR db "Error in opening file", 10, 0
+  OPEN_ERR_LEN equ $ - OPEN_ERR
+  READ_ERR db "Error in reading file", 10, 0
+  READ_ERR_LEN equ $ - READ_ERR
+
   filename db "main.bf", 0
 
 section .bss
@@ -19,21 +25,29 @@ section .text
   global _start
 
 _start:
+  ; open file "main.bf" and retrieve file descriptor
   mov rax, SYS_OPEN
   lea rdi, [filename]
   mov rsi, O_RDONLY
   syscall
-  cmp rax, 0
-  jl exit_with_code
 
-  ; rax has the file descriptor
-  mov rdi, rax
+  ; exit on error
+  cmp rax, 0
+  jl open_failed
+
+  ; move file descriptor to r15
+  mov r15, rax
+
+  ; rdi has the file descriptor
   mov rax, SYS_READ
+  mov rdi, r15
   lea rsi, [buf]
   mov rdx, 8
   syscall
+
+  ; exit on error
   cmp rax, 0
-  jl exit_with_code
+  jl read_failed
 
   ; buf contains the read data
   mov rax, SYS_WRITE
@@ -42,13 +56,39 @@ _start:
   mov rdx, 8
   syscall
 
+  ; exit with code 0
   mov rax, SYS_EXIT
   xor rdi, rdi
   syscall
 
-; exit_with_code
+open_failed:
+  neg rax ; Turn negative error into a positive exit code
+  mov rdi, rax
+  lea rsi, [OPEN_ERR]
+  mov rdx, OPEN_ERR_LEN
+  jmp exit
+
+read_failed:
+  neg rax
+  mov rdi, rax
+  lea rsi, [READ_ERR]
+  mov rdx, READ_ERR_LEN
+  jmp exit
+
+; exit
+; Exits the program with an error code and message
 ; Args:
 ;   rdi: Return code
-exit_with_code:
+;   rsi: Pointer to error message
+;   rdx: Length of error message
+exit:
+  mov r8, rdi ; store return code in r8
+
+  mov rax, SYS_WRITE
+  mov rdi, FD_STDERR
+  syscall
+
+  ; exit with exit code
   mov rax, SYS_EXIT
+  mov rdi, r8
   syscall
