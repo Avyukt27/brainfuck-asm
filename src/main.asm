@@ -10,13 +10,42 @@ DEFAULT REL
 
 %define O_RDONLY 0
 
-section .data
+section .rodata
   OPEN_ERR db "Error in opening file", 10, 0
   OPEN_ERR_LEN equ $ - OPEN_ERR
   READ_ERR db "Error in reading file", 10, 0
   READ_ERR_LEN equ $ - READ_ERR
 
   filename db "main.bf", 0
+
+  jump_table:
+    %assign i 0
+    %rep 256
+        %if i == '+'
+            dq do_inc
+        %elif i == '-'
+            dq do_dec
+        %elif i == '>'
+            dq do_next
+        %elif i == '<'
+            dq do_prev
+        %elif i == '.'
+            dq do_output
+        %elif i == ','
+            dq do_input
+        %elif i == '['
+            dq do_loop_start
+        %elif i == ']'
+            dq do_loop_end
+        %else
+            dq skip_char
+        %endif
+        %assign i i+1
+    %endrep
+
+
+section .data
+  data times 255 db 0 ; data array
 
 section .bss
   buf: resb 8
@@ -38,6 +67,8 @@ _start:
   ; move file descriptor to r15
   mov r15, rax
 
+  xor r12, r12 ; data pointer
+
   ; read 8 byte (char) chunks of file
 chunk_read:
   ; r15 has the file descriptor
@@ -53,13 +84,17 @@ chunk_read:
   ; exit on EOF
   jz exit
 
-  ; buf contains the read data
-  mov rdx, rax
-  mov rax, SYS_WRITE
-  mov rdi, FD_STDOUT
-  lea rsi, [buf]
-  syscall
+  mov r14, rax ; store no. of bytes read in r14
+  xor r13, r13 ; index counter in input byte
 
+process_chunk:
+  movzx rbx, byte [buf + r13]
+  jmp [jump_table + rbx * 8]
+
+next_chunk:
+  inc r13
+  cmp r13, r14
+  jl process_chunk
   jmp chunk_read
 
 exit:
@@ -99,3 +134,34 @@ err_exit:
   mov rax, SYS_EXIT
   mov rdi, r8
   syscall
+
+do_inc:
+  inc byte [data + r12]
+  jmp next_chunk
+do_dec:
+  dec byte [data + r12]
+  jmp next_chunk
+do_next:
+  inc r12
+  jmp next_chunk
+do_prev:
+  dec r12
+  jmp next_chunk
+do_output:
+  mov rax, SYS_WRITE
+  mov rdi, FD_STDOUT
+  lea rsi, [data + r12]
+  mov rdx, 1
+  syscall
+  jmp next_chunk
+do_input:
+do_loop_start:
+do_loop_end:
+skip_char:
+  jmp next_chunk
+
+next_instruction:
+  inc r13
+  cmp r13, r14
+  jl process_chunk
+  jmp chunk_read

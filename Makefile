@@ -1,5 +1,5 @@
 ASM := nasm
-ASM_FLAGS := -f elf64
+ASM_FLAGS := -f elf64 -F dwarf -g
 LD := ld
 
 SRC_DIR := src
