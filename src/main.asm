@@ -3,6 +3,8 @@ DEFAULT REL
 %define SYS_READ 0
 %define SYS_WRITE 1
 %define SYS_OPEN 2
+%define SYS_CLOSE 3
+%define SYS_LSEEK 8
 %define SYS_EXIT 60
 
 %define FD_STDOUT 1
@@ -48,7 +50,7 @@ section .data
   data times 255 db 0 ; data array
 
 section .bss
-  buf: resb 8
+  buf: resb 1
 
 section .text
   global _start
@@ -69,13 +71,13 @@ _start:
 
   xor r12, r12 ; data pointer
 
-  ; read 8 byte (char) chunks of file
-chunk_read:
+  ; read 1 byte (char) of file
+byte_read:
   ; r15 has the file descriptor
   mov rax, SYS_READ
   mov rdi, r15
   lea rsi, [buf]
-  mov rdx, 8
+  mov rdx, 1
   syscall
 
   ; exit on error
@@ -84,20 +86,15 @@ chunk_read:
   ; exit on EOF
   jz exit
 
-  mov r14, rax ; store no. of bytes read in r14
-  xor r13, r13 ; index counter in input byte
-
-process_chunk:
-  movzx rbx, byte [buf + r13]
-  jmp [jump_table + rbx * 8]
-
-next_chunk:
-  inc r13
-  cmp r13, r14
-  jl process_chunk
-  jmp chunk_read
+  movzx rbx, byte [buf] ; read byte form buf into rbx
+  jmp [jump_table + rbx * 8] ; jump to corresponding routine
 
 exit:
+  ; close file fd
+  mov rax, SYS_CLOSE
+  mov rdi, r15
+  syscall
+
   ; exit with code 0
   mov rax, SYS_EXIT
   xor rdi, rdi
@@ -105,17 +102,40 @@ exit:
 
 open_failed:
   neg rax ; turn negative error into a positive exit code
-  mov rdi, rax
+  mov r8, rax ; store exit code in r8
+
+  ; write error message
+  mov rax, SYS_WRITE
+  mov rdi, FD_STDERR
   lea rsi, [OPEN_ERR]
   mov rdx, OPEN_ERR_LEN
-  jmp err_exit
+  syscall
+
+  ; exit with exit code
+  mov rax, SYS_EXIT
+  mov rdi, r8
+  syscall
 
 read_failed:
-  neg rax
-  mov rdi, rax
+  neg rax ; turn negative error into a positive exit code
+  mov r8, rax ; store exit code in r8
+
+  ; write error message
+  mov rax, SYS_WRITE
+  mov rdi, FD_STDERR
   lea rsi, [READ_ERR]
   mov rdx, READ_ERR_LEN
-  jmp err_exit
+  syscall
+
+  ; close file fd
+  mov rax, SYS_CLOSE
+  mov rdi, r15
+  syscall
+
+  ; exit with exit code
+  mov rax, SYS_EXIT
+  mov rdi, r8
+  syscall
 
 ; err_exit
 ; Exits the program with an error code and message
@@ -126,42 +146,28 @@ read_failed:
 err_exit:
   mov r8, rdi ; store return code in r8
 
-  mov rax, SYS_WRITE
-  mov rdi, FD_STDERR
-  syscall
-
-  ; exit with exit code
-  mov rax, SYS_EXIT
-  mov rdi, r8
-  syscall
 
 do_inc:
   inc byte [data + r12]
-  jmp next_chunk
+  jmp byte_read
 do_dec:
   dec byte [data + r12]
-  jmp next_chunk
+  jmp byte_read
 do_next:
   inc r12
-  jmp next_chunk
+  jmp byte_read
 do_prev:
   dec r12
-  jmp next_chunk
+  jmp byte_read
 do_output:
   mov rax, SYS_WRITE
   mov rdi, FD_STDOUT
   lea rsi, [data + r12]
   mov rdx, 1
   syscall
-  jmp next_chunk
+  jmp byte_read
 do_input:
 do_loop_start:
 do_loop_end:
 skip_char:
-  jmp next_chunk
-
-next_instruction:
-  inc r13
-  cmp r13, r14
-  jl process_chunk
-  jmp chunk_read
+  jmp byte_read
