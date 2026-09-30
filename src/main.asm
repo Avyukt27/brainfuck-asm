@@ -23,6 +23,8 @@ section .rodata
   READ_ERR_LEN equ $ - READ_ERR
   INT_ERR db "Error in program execution", 10, 0
   INT_ERR_LEN equ $ - INT_ERR
+  MISSING_ARG_ERR db "Did not receive enough arguments", 10, 0
+  MISSING_ARG_ERR_LEN equ $ - MISSING_ARG_ERR
 
   jump_table:
     %assign i 0
@@ -51,7 +53,6 @@ section .rodata
 
 
 section .data
-  filename db "main.bf", 0
   data times 255 db 0 ; data array
 
 section .bss
@@ -62,9 +63,15 @@ section .text
   global _start
 
 _start:
-  ; open file "main.bf" and retrieve file descriptor
+  ; [rsp] has argc, it should be 2
+  mov rcx, [rsp]
+  cmp rcx, 2
+  jl  missing_argument_err ; error if less than 2 arguments were provided
+  ; [rsp + 16] has argv[1] (the pointer to the filename)
+  mov rdi, [rsp + 16] ; rdi has pointer to filename
+
+  ; open file and retrieve file descriptor
   mov rax, SYS_OPEN
-  lea rdi, [filename]
   mov rsi, O_RDONLY
   syscall
 
@@ -155,6 +162,19 @@ interpreter_err:
   ; close file fd
   mov rax, SYS_CLOSE
   mov rdi, r15
+  syscall
+
+  ; exit with exit code
+  mov rax, SYS_EXIT
+  mov rdi, 1
+  syscall
+
+missing_argument_err:
+  ; write error message
+  mov rax, SYS_WRITE
+  mov rdi, FD_STDERR
+  lea rsi, [MISSING_ARG_ERR]
+  mov rdx, MISSING_ARG_ERR_LEN
   syscall
 
   ; exit with exit code
