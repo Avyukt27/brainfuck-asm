@@ -7,6 +7,7 @@ DEFAULT REL
 %define SYS_LSEEK 8
 %define SYS_EXIT 60
 
+%define FD_STDIN 0
 %define FD_STDOUT 1
 %define FD_STDERR 2
 
@@ -17,6 +18,8 @@ section .rodata
   OPEN_ERR_LEN equ $ - OPEN_ERR
   READ_ERR db "Error in reading file", 10, 0
   READ_ERR_LEN equ $ - READ_ERR
+  INT_ERR db "Error in program execution", 10, 0
+  INT_ERR_LEN equ $ - INT_ERR
 
   filename db "main.bf", 0
 
@@ -50,7 +53,8 @@ section .data
   data times 255 db 0 ; data array
 
 section .bss
-  buf: resb 1
+  buf resb 1
+  loop_start_idxs resq 255
 
 section .text
   global _start
@@ -70,6 +74,7 @@ _start:
   mov r15, rax
 
   xor r12, r12 ; data pointer
+  xor r13, r13 ; current loop depth
 
   ; read 1 byte (char) of file
 byte_read:
@@ -137,15 +142,23 @@ read_failed:
   mov rdi, r8
   syscall
 
-; err_exit
-; Exits the program with an error code and message
-; Args:
-;   rdi: Return code
-;   rsi: Pointer to error message
-;   rdx: Length of error message
-err_exit:
-  mov r8, rdi ; store return code in r8
+interpreter_err:
+  ; write error message
+  mov rax, SYS_WRITE
+  mov rdi, FD_STDERR
+  lea rsi, [INT_ERR]
+  mov rdx, INT_ERR_LEN
+  syscall
 
+  ; close file fd
+  mov rax, SYS_CLOSE
+  mov rdi, r15
+  syscall
+
+  ; exit with exit code
+  mov rax, SYS_EXIT
+  mov rdi, 1
+  syscall
 
 do_inc:
   inc byte [data + r12]
@@ -167,6 +180,12 @@ do_output:
   syscall
   jmp byte_read
 do_input:
+  mov rax, SYS_READ
+  mov rdi, FD_STDIN
+  lea rsi, [data + r12]
+  mov rdx, 1
+  syscall
+  jmp byte_read
 do_loop_start:
 do_loop_end:
 skip_char:
