@@ -9,9 +9,9 @@ TARGET := $(BUILD_DIR)/main
 SRC := $(SRC_DIR)/main.asm
 OBJ := $(BUILD_DIR)/main.o
 
-all: clean $(TARGET) run
+all: clean build run
 
-$(TARGET): $(OBJ)
+build: $(OBJ)
 	@mkdir -p $(BUILD_DIR)
 	$(LD) $(OBJ) -o $(TARGET)
 

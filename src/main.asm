@@ -13,6 +13,9 @@ DEFAULT REL
 
 %define O_RDONLY 0
 
+%define SEEK_START 0
+%define SEEK_CUR 1
+
 section .rodata
   OPEN_ERR db "Error in opening file", 10, 0
   OPEN_ERR_LEN equ $ - OPEN_ERR
@@ -20,8 +23,6 @@ section .rodata
   READ_ERR_LEN equ $ - READ_ERR
   INT_ERR db "Error in program execution", 10, 0
   INT_ERR_LEN equ $ - INT_ERR
-
-  filename db "main.bf", 0
 
   jump_table:
     %assign i 0
@@ -50,6 +51,7 @@ section .rodata
 
 
 section .data
+  filename db "main.bf", 0
   data times 255 db 0 ; data array
 
 section .bss
@@ -77,7 +79,7 @@ _start:
   xor r13, r13 ; current loop depth
 
   ; read 1 byte (char) of file
-byte_read:
+read_byte:
   ; r15 has the file descriptor
   mov rax, SYS_READ
   mov rdi, r15
@@ -162,31 +164,65 @@ interpreter_err:
 
 do_inc:
   inc byte [data + r12]
-  jmp byte_read
+  jmp read_byte
 do_dec:
   dec byte [data + r12]
-  jmp byte_read
+  jmp read_byte
 do_next:
   inc r12
-  jmp byte_read
+  jmp read_byte
 do_prev:
   dec r12
-  jmp byte_read
+  jmp read_byte
 do_output:
   mov rax, SYS_WRITE
   mov rdi, FD_STDOUT
   lea rsi, [data + r12]
   mov rdx, 1
   syscall
-  jmp byte_read
+  jmp read_byte
 do_input:
   mov rax, SYS_READ
   mov rdi, FD_STDIN
   lea rsi, [data + r12]
   mov rdx, 1
   syscall
-  jmp byte_read
+  jmp read_byte
 do_loop_start:
+  cmp byte [data + r12], 0
+  je .end_loop ; if current cell is 0, end the loop
+
+  ; save loop start idx in rax
+  mov rax, SYS_LSEEK
+  mov rdi, r15 ; file fd
+  xor rsi, rsi ; not moving
+  mov rdx, SEEK_CUR
+  syscall
+
+  mov qword [loop_start_idxs + r13 * 8], rax ; move loop start idx into array
+  inc r13 ; increase depth
+  jmp read_byte
+.end_loop:
+  jmp read_byte
 do_loop_end:
+  cmp byte [data + r12], 0
+  je .end_loop ; if current cell is 0, end the loop
+
+  dec r13 ; decrease loop depth
+
+  cmp r13, 0 ; if r13 is less than 0, invalid ]
+  jl interpreter_err
+
+  ; move file pointer to loop start
+  mov rax, SYS_LSEEK
+  mov rdi, r15
+  mov rsi, qword [loop_start_idxs + r13 * 8]
+  mov rdx, SEEK_START ; absolute jump
+  syscall
+
+  inc r13 ; increase loop depth
+  jmp read_byte
+.end_loop:
+  jmp read_byte
 skip_char:
-  jmp byte_read
+  jmp read_byte
