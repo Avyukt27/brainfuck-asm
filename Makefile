@@ -19,10 +19,7 @@ $(OBJ): $(SRC)
 	@mkdir -p $(BUILD_DIR)
 	$(ASM) $(ASM_FLAGS) $(SRC) -o $(OBJ)
 
-run: $(TARGET)
-	@./$(TARGET)
-
 clean:
 	rm -rf $(BUILD_DIR)
 
-.PHONY: all run clean
+.PHONY: all clean
