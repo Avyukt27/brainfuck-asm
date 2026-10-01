@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -e
+
+TEST_DIR=$(mktemp -d)
+BF_FILE="$TEST_DIR/input.bf"
+
+cat <<'EOF' >"$BF_FILE"
+,+.
+EOF
+
+OUTPUT=$(echo 'H' | ./build/main "$BF_FILE")
+
+if [ "$OUTPUT" = "I" ]; then
+  echo "Passed"
+else
+  echo "Failed"
+fi
