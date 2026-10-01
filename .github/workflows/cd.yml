@@ -19,24 +19,8 @@ jobs:
           sudo apt-get install -y nasm
       - name: Build binary
         run: make build
-      - name: Upload artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: quadfuck
-          path: build/main
-
-  deploy:
-    needs: [build]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - name: Download artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: quadfuck
-          path: .
       - name: Create Release
         run: |
-          gh release create "$GITHUB_REF_NAME" --generate-notes --latest=true './quadfuck#QuadFuck Interpreter'
+          gh release create "$GITHUB_REF_NAME" './build/main#QuadFuck Interpreter' --generate-notes --latest=true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
