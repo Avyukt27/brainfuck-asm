@@ -2,18 +2,67 @@
 
 make
 
-TARGET_DIR="./tests"
-
-if [ ! -d "$TARGET_DIR" ]; then
-  echo "directory does not exist"
-  exit 1
-fi
+declare -A tests=(
+  ["hello"]=">++++++++[<+++++++++>-]<.---.+++++++..+++.||HELLO"
+  ["input"]=",.|C|C"
+  ["to_lower"]=",>++++[<++++++++>-]<.|A|a"
+  ["to_upper"]=",>++++[<-------->-]<.|aA|A"
+  ["nested_loops"]="++++++[>+++++++[>+<-]<-]>>.||*"
+  ["cat_loop"]="+[,.]|Hello\x00|Hello\x00"
+  ["underflow"]="-.||\xff"
+)
 
 echo "Starting tests"
-echo "-------------------------------"
 
-for file in "$TARGET_DIR"/*; do
-  [ -e "$file" ] || continue
-  echo -n "Running $file: "
-  "$file"
+INTERPRETER="build/main"
+TEMP_IN=$(mktemp)
+TEMP_OUT=$(mktemp)
+
+trap 'rm -f "$TEMP_IN" "$TEMP_OUT"' EXIT
+
+mkdir -p /tmp/bf_test
+
+passed=0
+failed=0
+
+for test_name in "${!tests[@]}"; do
+  raw_value="${tests[$test_name]}"
+  IFS='|' read -r code input expected <<<"$raw_value"
+
+  echo "-------------------------------"
+  echo "Running test: $test_name"
+  echo "  -> Code: $code"
+  echo "  -> Input: $input"
+  echo "  -> Expected output: $expected"
+
+  printf "%b" "$input" >"$TEMP_IN"
+  printf "%b" "$expected" >"$TEMP_OUT"
+
+  tmp_file=$(mktemp "/tmp/bf_test/$test_name.XXXX")
+  tmp_o_file=$(mktemp "/tmp/bf_test/$test_name.XXXX.o")
+  echo -n "$code" >"$tmp_file"
+
+  "$INTERPRETER" "$tmp_file" <"$TEMP_IN" >"$tmp_o_file" 2>&1
+
+  if cmp -s "$tmp_o_file" "$TEMP_OUT"; then
+    echo "  -> Result: PASSED"
+    ((passed++))
+  else
+    echo "  -> Result: FAILED"
+    echo "     Expected (hex): $(xxd -p "$TEMP_OUT" | tr -d '\n')"
+    echo "     Got (hex):      $(xxd -p "$tmp_o_file" | tr -d '\n')"
+    echo "     Got (text):     '$(cat -v "$tmp_o_file")'"
+    ((failed++))
+  fi
+
+  rm -f "$tmp_file" "$tmp_o_file"
 done
+
+echo "==============================="
+echo "Tests Completed: $((passed + failed))"
+echo "  Passed: $passed"
+echo "  Failed: $failed"
+
+if ((failed > 0)); then
+  exit 1
+fi

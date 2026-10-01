@@ -214,39 +214,71 @@ do_input:
   jmp read_byte
 do_loop_start:
   cmp byte [data + r12], 0
-  je .end_loop ; if current cell is 0, end the loop
+  je .skip_loop_body ; if current cell is 0, skip to end of loop
 
-  ; save loop start idx in rax
+  ; save the address after [ as loop start point
   mov rax, SYS_LSEEK
   mov rdi, r15 ; file fd
-  xor rsi, rsi ; not moving
-  mov rdx, SEEK_CUR
+  xor rsi, rsi ; offset 0
+  mov rdx, SEEK_CUR ; get current position
   syscall
 
-  mov qword [loop_start_idxs + r13 * 8], rax ; move loop start idx into array
+  mov qword [loop_start_idxs + r13 * 8], rax ; push onto loop stack
   inc r13 ; increase depth
   jmp read_byte
-.end_loop:
+.skip_loop_body:
+  mov r14, 1 ; r14 will track local bracket nesting depth for this skip
+.scan_forward:
+  ; read byte from the file stream into a byte on stack
+  push qword 0 ; allocate space on stack for 1 character
+  mov rax, SYS_READ
+  mov rdi, r15
+  mov rsi, rsp ; buffer is the stack pointer
+  mov rdx, 1
+  syscall
+  
+  cmp rax, 0 ; EOF reached without finding matching ]
+  jle interpreter_err 
+
+  pop rax ; al now contains the character read
+  
+  cmp al, '[' ; nested open loop
+  je .nest_open
+  cmp al, ']'  ; loop end
+  je .nest_close
+  jmp .scan_forward
+.nest_open:
+  inc r14
+  jmp .scan_forward
+.nest_close:
+  dec r14
+  cmp r14, 0
+  jg .scan_forward ; if r14 > 0, we are inside nested loops
+  
+  ; loop is FINALLY over
   jmp read_byte
+
 do_loop_end:
   cmp byte [data + r12], 0
-  je .end_loop ; if current cell is 0, end the loop
+  je .exit_loop ; if current cell is 0, end loop
 
-  dec r13 ; decrease loop depth
+  ; jump back to the instruction AFTER the [
+  cmp r13, 0
+  jle interpreter_err ; not in a loop check
 
-  cmp r13, 0 ; if r13 is less than 0, invalid ]
-  jl interpreter_err
-
-  ; move file pointer to loop start
   mov rax, SYS_LSEEK
   mov rdi, r15
-  mov rsi, qword [loop_start_idxs + r13 * 8]
-  mov rdx, SEEK_START ; absolute jump
+  mov rsi, qword [loop_start_idxs + (r13 - 1) * 8] ; Peek at the top item without changing r13 yet
+  mov rdx, SEEK_START
   syscall
 
-  inc r13 ; increase loop depth
   jmp read_byte
-.end_loop:
+
+.exit_loop:
+  ; pop loop start location from stack because this loop is done
+  cmp r13, 0
+  jle interpreter_err
+  dec r13 ; Safely discard the index from the tracking stack
   jmp read_byte
 skip_char:
   jmp read_byte
