@@ -1,22 +1,22 @@
 DEFAULT REL
 
-%define SYS_READ 0
-%define SYS_WRITE 1
-%define SYS_OPEN 2
-%define SYS_CLOSE 3
-%define SYS_LSEEK 8
-%define SYS_EXIT 60
+SYS_READ equ 0
+SYS_WRITE equ 1
+SYS_OPEN equ 2
+SYS_CLOSE equ 3
+SYS_LSEEK equ 8
+SYS_EXIT equ 60
 
-%define FD_STDIN 0
-%define FD_STDOUT 1
-%define FD_STDERR 2
+FD_STDIN equ 0
+FD_STDOUT equ 1
+FD_STDERR equ 2
 
-%define O_RDONLY 0
+O_RDONLY equ 0
 
-%define SEEK_START 0
-%define SEEK_CUR 1
+SEEK_START equ 0
+SEEK_CUR equ 1
 
-%define DATA_SIZE 65536 ; 2^16 cells in tape
+DATA_SIZE equ 65536 ; 2^16 cells in tape
 
 section .rodata
   OPEN_ERR db "Error in opening file", 10, 0
