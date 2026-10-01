@@ -16,6 +16,8 @@ DEFAULT REL
 %define SEEK_START 0
 %define SEEK_CUR 1
 
+%define DATA_SIZE 65536 ; 2^16 cells in tape
+
 section .rodata
   OPEN_ERR db "Error in opening file", 10, 0
   OPEN_ERR_LEN equ $ - OPEN_ERR
@@ -53,7 +55,7 @@ section .rodata
 
 
 section .data
-  data times 255 db 0 ; data array
+  data times DATA_SIZE db 0 ; data array
 
 section .bss
   buf resb 1
@@ -190,9 +192,11 @@ do_dec:
   jmp read_byte
 do_next:
   inc r12
+  and r12, DATA_SIZE - 1
   jmp read_byte
 do_prev:
   dec r12
+  and r12, DATA_SIZE - 1
   jmp read_byte
 do_output:
   mov rax, SYS_WRITE

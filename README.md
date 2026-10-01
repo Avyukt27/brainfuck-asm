@@ -1,4 +1,4 @@
-# A brainfuck interpreter written in pure x86_64 linux assembly
+# QuadFuck - A brainfuck interpreter written in pure x86_64 assembly
 
 To obtain the interpreter, simply run `make`. An executable will be created at `./build/main`
 
