@@ -20,7 +20,9 @@ jobs:
       - name: Build binary
         run: make build
       - name: Create Release
-        run: |
-          gh release create "$GITHUB_REF_NAME" './build/main#QuadFuck Interpreter' --generate-notes --latest=true
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.0
+          files: build/main
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
